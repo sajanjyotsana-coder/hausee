@@ -422,6 +422,8 @@ export interface AddHomeFormData {
 
 export type EvaluateTabType = 'browse' | 'compare' | 'inspection';
 
+export type EvaluateViewMode = 'tab' | 'detail' | 'rating';
+
 export type InspectionRating = 'good' | 'fix' | 'replace' | null;
 
 export interface InspectionItem {

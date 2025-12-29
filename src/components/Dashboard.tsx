@@ -49,13 +49,22 @@ export default function Dashboard() {
 
   const getActiveTabFromPath = (): TabId => {
     const path = location.pathname.substring(1);
-    if (['plan', 'evaluate', 'select', 'guide', 'ai'].includes(path)) {
+    if (path.startsWith('evaluate')) {
+      return 'evaluate';
+    }
+    if (['plan', 'select', 'guide', 'ai'].includes(path)) {
       return path as TabId;
     }
     return 'plan';
   };
 
+  const getHomeIdFromPath = (): string | undefined => {
+    const match = location.pathname.match(/^\/evaluate\/([^/]+)$/);
+    return match ? match[1] : undefined;
+  };
+
   const activeTab = getActiveTabFromPath();
+  const homeId = getHomeIdFromPath();
 
   const handleTabChange = (tab: string) => {
     navigate(`/${tab}`);
@@ -66,7 +75,7 @@ export default function Dashboard() {
       case 'plan':
         return <PlanTab />;
       case 'evaluate':
-        return <EvaluateTab />;
+        return <EvaluateTab initialHomeId={homeId} />;
       case 'select':
         return <SelectTab />;
       case 'guide':

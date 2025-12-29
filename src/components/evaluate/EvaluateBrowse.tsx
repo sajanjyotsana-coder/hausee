@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Plus, Search, X } from 'lucide-react';
 import { Home, AddHomeFormData } from '../../types';
 import HomeCard from './HomeCard';
@@ -15,6 +14,7 @@ interface EvaluateBrowseProps {
   onToggleFavorite: (homeId: string) => void;
   onToggleCompare: (homeId: string) => Promise<{ success: boolean; error?: string }>;
   onCompareClick?: () => void;
+  onHomeClick: (homeId: string) => void;
 }
 
 export default function EvaluateBrowse({
@@ -25,8 +25,8 @@ export default function EvaluateBrowse({
   onToggleFavorite,
   onToggleCompare,
   onCompareClick,
+  onHomeClick,
 }: EvaluateBrowseProps) {
-  const navigate = useNavigate();
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +62,7 @@ export default function EvaluateBrowse({
   };
 
   const handleCardClick = (homeId: string) => {
-    navigate(`/evaluate/${homeId}`);
+    onHomeClick(homeId);
   };
 
   if (isLoading) {
