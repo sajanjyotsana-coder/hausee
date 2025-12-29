@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const TESTING_MODE = false;
+  const TESTING_MODE = true;
 
   if (TESTING_MODE) {
     return <>{children}</>;
