@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Check, Save } from 'lucide-react';
-import * as Icons from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronUp, Check, Save, ArrowUp } from 'lucide-react';
 import { Home, HomeEvaluation, RatingValue } from '../../types';
 import { EVALUATION_CATEGORIES, calculateOverallRating, calculateCompletionPercentage } from '../../data/evaluationCategories';
 import { saveEvaluation } from '../../lib/supabaseClient';
-import EvaluationItemComponent from './EvaluationItem';
+import EvaluationCategoryCard from './EvaluationCategoryCard';
 import { useToast } from '../ToastContainer';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -20,16 +19,15 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
   const { showError } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [ratings, setRatings] = useState<HomeEvaluation['ratings']>({});
   const [itemNotes, setItemNotes] = useState<HomeEvaluation['itemNotes']>({});
   const [sectionNotes, setSectionNotes] = useState<HomeEvaluation['sectionNotes']>({});
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const currentSection = EVALUATION_CATEGORIES[currentSectionIndex];
 
   useEffect(() => {
     if (evaluation) {
@@ -38,6 +36,15 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
       setSectionNotes(evaluation.sectionNotes || {});
     }
   }, [evaluation]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 400);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const performSave = useCallback(async () => {
     if (!user?.id) {
@@ -121,20 +128,28 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
     debouncedSave();
   }, [debouncedSave]);
 
-  const handlePrevious = () => {
-    if (currentSectionIndex > 0) {
-      setCurrentSectionIndex(currentSectionIndex - 1);
-    }
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleNext = () => {
-    if (currentSectionIndex < EVALUATION_CATEGORIES.length - 1) {
-      setCurrentSectionIndex(currentSectionIndex + 1);
-    }
+  const handleToggleCategory = (categoryId: string) => {
+    setExpandedCategories((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
   };
 
-  const handleSectionSelect = (index: number) => {
-    setCurrentSectionIndex(index);
+  const handleExpandAll = () => {
+    setExpandedCategories(new Set(EVALUATION_CATEGORIES.map(c => c.id)));
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedCategories(new Set());
   };
 
   const handleBackClick = async () => {
@@ -154,22 +169,10 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
     onBack();
   };
 
-  const getSectionProgress = (categoryId: string): number => {
-    const category = EVALUATION_CATEGORIES.find((c) => c.id === categoryId);
-    if (!category) return 0;
-
-    const ratedItems = category.items.filter((item) => {
-      const value = ratings[categoryId]?.[item.id];
-      return value !== undefined && value !== null && value !== '';
-    }).length;
-
-    return Math.round((ratedItems / category.items.length) * 100);
-  };
-
-  const IconComponent = (Icons as Record<string, React.ComponentType<{ className?: string }>>)[currentSection.icon] || Icons.Home;
+  const overallProgress = calculateCompletionPercentage(ratings);
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="pb-8">
       <div className="mb-4">
         <button
           onClick={handleBackClick}
@@ -180,85 +183,12 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">{home.address}</h2>
-            <p className="text-sm text-gray-600">{home.neighborhood}</p>
+      <div className="mb-6">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900">{home.address}</h1>
+            <p className="text-gray-600">{home.neighborhood}</p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 px-6 py-3 bg-gray-50 border-b border-gray-200 overflow-x-auto">
-          {EVALUATION_CATEGORIES.map((category, index) => (
-            <button
-              key={category.id}
-              onClick={() => handleSectionSelect(index)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                index === currentSectionIndex
-                  ? 'bg-primary-400 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {category.title}
-            </button>
-          ))}
-        </div>
-
-        <div className="px-6 py-6">
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-primary-50 rounded-lg flex items-center justify-center">
-                <IconComponent className="w-6 h-6 text-primary-400" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900">{currentSection.title}</h3>
-                <p className="text-sm text-gray-600">
-                  {getSectionProgress(currentSection.id)}% complete
-                </p>
-              </div>
-            </div>
-
-            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-4">
-              <div
-                className="h-full bg-primary-400 transition-all duration-300"
-                style={{ width: `${getSectionProgress(currentSection.id)}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            {currentSection.items.map((item) => (
-              <EvaluationItemComponent
-                key={item.id}
-                item={item}
-                categoryId={currentSection.id}
-                value={ratings[currentSection.id]?.[item.id] || null}
-                note={itemNotes[item.id] || ''}
-                onRatingChange={handleRatingChange}
-                onNoteChange={handleNoteChange}
-              />
-            ))}
-          </div>
-
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <label className="block text-sm font-medium text-gray-900 mb-2">
-              Section Notes (optional, max 1000 characters)
-            </label>
-            <textarea
-              value={sectionNotes[currentSection.id] || ''}
-              onChange={(e) => handleSectionNoteChange(currentSection.id, e.target.value)}
-              placeholder={`Add any general notes about ${currentSection.title.toLowerCase()}...`}
-              rows={4}
-              maxLength={1000}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-100 focus:border-primary-400 resize-none"
-            />
-            <div className="text-xs text-gray-500 text-right mt-1">
-              {(sectionNotes[currentSection.id] || '').length}/1000
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
           <div className="flex items-center gap-3 text-sm text-gray-600">
             {isSaving ? (
               <div className="flex items-center gap-2">
@@ -272,45 +202,86 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
               </div>
             ) : null}
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePrevious}
-              disabled={currentSectionIndex === 0}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </button>
-
-            {currentSectionIndex === EVALUATION_CATEGORIES.length - 1 ? (
-              <button
-                onClick={handleConfirmBack}
-                className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center gap-2"
-              >
-                <Check className="w-4 h-4" />
-                Complete
-              </button>
-            ) : (
-              <button
-                onClick={handleNext}
-                className="px-4 py-2 bg-primary-400 text-white rounded-lg hover:bg-primary-500 transition-colors font-medium flex items-center gap-2"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">Overall Progress</span>
+            <span className="text-sm font-bold text-gray-900">{overallProgress}%</span>
+          </div>
+          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary-400 transition-all duration-300"
+              style={{ width: `${overallProgress}%` }}
+            />
           </div>
         </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExpandAll}
+            className="text-sm text-primary-400 hover:text-primary-500 transition-colors flex items-center gap-1"
+          >
+            <ChevronDown className="w-4 h-4" />
+            Expand All
+          </button>
+          <span className="text-gray-300">|</span>
+          <button
+            onClick={handleCollapseAll}
+            className="text-sm text-primary-400 hover:text-primary-500 transition-colors flex items-center gap-1"
+          >
+            <ChevronUp className="w-4 h-4" />
+            Collapse All
+          </button>
+        </div>
       </div>
+
+      <div className="space-y-4">
+        {EVALUATION_CATEGORIES.map((category) => (
+          <EvaluationCategoryCard
+            key={category.id}
+            category={category}
+            categoryId={category.id}
+            isExpanded={expandedCategories.has(category.id)}
+            onToggle={() => handleToggleCategory(category.id)}
+            ratings={ratings[category.id] || {}}
+            itemNotes={itemNotes}
+            sectionNote={sectionNotes[category.id] || ''}
+            onRatingChange={handleRatingChange}
+            onNoteChange={handleNoteChange}
+            onSectionNoteChange={(note) => handleSectionNoteChange(category.id, note)}
+          />
+        ))}
+      </div>
+
+      {overallProgress === 100 && (
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={handleConfirmBack}
+            className="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center gap-2 shadow-lg"
+          >
+            <Check className="w-5 h-5" />
+            Complete Evaluation
+          </button>
+        </div>
+      )}
+
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 p-4 bg-primary-400 text-white rounded-full shadow-lg hover:bg-primary-500 transition-all z-50"
+          aria-label="Back to top"
+        >
+          <ArrowUp className="w-6 h-6" />
+        </button>
+      )}
 
       {showBackConfirm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Save and Exit?</h3>
             <p className="text-gray-600 mb-6">
-              Your evaluation is {calculateCompletionPercentage(ratings)}% complete. Your progress will be
-              saved automatically.
+              Your evaluation is {overallProgress}% complete. Your progress will be saved automatically.
             </p>
             <div className="flex gap-3">
               <button
