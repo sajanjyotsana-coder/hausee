@@ -646,6 +646,20 @@ export async function ensureUserWorkspace(userId: string): Promise<{ workspaceId
   try {
     console.log('[ensureUserWorkspace] Starting for userId:', userId);
 
+    // Verify auth session first
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('[ensureUserWorkspace] Session check:', {
+      hasSession: !!session,
+      sessionError,
+      accessToken: session?.access_token ? 'present' : 'missing',
+      user: session?.user?.id
+    });
+
+    if (!session || sessionError) {
+      console.error('[ensureUserWorkspace] No valid session:', sessionError);
+      return { workspaceId: null, error: 'Authentication session not found. Please log in again.' };
+    }
+
     // First, check if user already has a workspace membership
     const { data: membership, error: membershipError } = await supabase
       .from('workspace_members')
@@ -662,9 +676,14 @@ export async function ensureUserWorkspace(userId: string): Promise<{ workspaceId
 
     // Get the user's UUID from auth
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log('[ensureUserWorkspace] Auth user:', { user: user?.id, authError });
+    console.log('[ensureUserWorkspace] Auth user:', {
+      userId: user?.id,
+      authError,
+      matchesInput: user?.id === session.user.id
+    });
 
     if (!user) {
+      console.error('[ensureUserWorkspace] No authenticated user found');
       return { workspaceId: null, error: 'User not authenticated' };
     }
 
@@ -679,11 +698,23 @@ export async function ensureUserWorkspace(userId: string): Promise<{ workspaceId
       .select('id')
       .single();
 
-    console.log('[ensureUserWorkspace] Workspace creation result:', { workspace, workspaceError });
+    console.log('[ensureUserWorkspace] Workspace creation result:', {
+      workspace,
+      workspaceError,
+      errorDetails: workspaceError ? {
+        message: workspaceError.message,
+        code: workspaceError.code,
+        details: workspaceError.details,
+        hint: workspaceError.hint
+      } : null
+    });
 
     if (workspaceError || !workspace) {
-      console.error('Error creating workspace:', workspaceError);
-      return { workspaceId: null, error: workspaceError?.message || 'Failed to create workspace' };
+      console.error('[ensureUserWorkspace] Error creating workspace:', workspaceError);
+      return {
+        workspaceId: null,
+        error: workspaceError?.message || 'Failed to create workspace'
+      };
     }
 
     // Add user as owner of the workspace
@@ -696,17 +727,25 @@ export async function ensureUserWorkspace(userId: string): Promise<{ workspaceId
         role: 'owner',
       });
 
-    console.log('[ensureUserWorkspace] Workspace member addition result:', { memberError });
+    console.log('[ensureUserWorkspace] Workspace member addition result:', {
+      memberError,
+      errorDetails: memberError ? {
+        message: memberError.message,
+        code: memberError.code,
+        details: memberError.details,
+        hint: memberError.hint
+      } : null
+    });
 
     if (memberError) {
-      console.error('Error adding workspace member:', memberError);
+      console.error('[ensureUserWorkspace] Error adding workspace member:', memberError);
       return { workspaceId: null, error: memberError.message };
     }
 
     console.log('[ensureUserWorkspace] Successfully created workspace:', workspace.id);
     return { workspaceId: workspace.id };
   } catch (err) {
-    console.error('Error ensuring workspace:', err);
+    console.error('[ensureUserWorkspace] Exception caught:', err);
     return {
       workspaceId: null,
       error: err instanceof Error ? err.message : 'Unknown error',
