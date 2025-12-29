@@ -646,25 +646,21 @@ export async function ensureUserWorkspace(userId: string): Promise<{ workspaceId
   try {
     console.log('[ensureUserWorkspace] Starting for userId:', userId);
 
-    // Verify auth session first
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('[ensureUserWorkspace] Session check:', {
-      hasSession: !!session,
-      sessionError,
-      accessToken: session?.access_token ? 'present' : 'missing',
-      user: session?.user?.id
-    });
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!session || sessionError) {
-      console.error('[ensureUserWorkspace] No valid session:', sessionError);
-      return { workspaceId: null, error: 'Authentication session not found. Please log in again.' };
+    if (!user || authError) {
+      console.error('[ensureUserWorkspace] No authenticated user found:', authError);
+      return { workspaceId: null, error: 'User not authenticated' };
     }
+
+    console.log('[ensureUserWorkspace] Auth user:', user.id);
 
     // First, check if user already has a workspace membership
     const { data: membership, error: membershipError } = await supabase
       .from('workspace_members')
       .select('workspace_id')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .maybeSingle();
 
     console.log('[ensureUserWorkspace] Membership check:', { membership, membershipError });
@@ -674,25 +670,14 @@ export async function ensureUserWorkspace(userId: string): Promise<{ workspaceId
       return { workspaceId: membership.workspace_id };
     }
 
-    // Get the user's UUID from auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log('[ensureUserWorkspace] Auth user:', {
-      userId: user?.id,
-      authError,
-      matchesInput: user?.id === session.user.id
-    });
-
-    if (!user) {
-      console.error('[ensureUserWorkspace] No authenticated user found');
-      return { workspaceId: null, error: 'User not authenticated' };
-    }
-
     // Create a workspace for the user
+    const workspaceName = user.email ? `${user.email}'s Workspace` : 'My Workspace';
     console.log('[ensureUserWorkspace] Creating workspace for user:', user.id);
+
     const { data: workspace, error: workspaceError } = await supabase
       .from('workspaces')
       .insert({
-        name: 'My Workspace',
+        name: workspaceName,
         created_by: user.id,
       })
       .select('id')
@@ -718,12 +703,12 @@ export async function ensureUserWorkspace(userId: string): Promise<{ workspaceId
     }
 
     // Add user as owner of the workspace
-    console.log('[ensureUserWorkspace] Adding workspace member:', { workspace_id: workspace.id, user_id: userId });
+    console.log('[ensureUserWorkspace] Adding workspace member:', { workspace_id: workspace.id, user_id: user.id });
     const { error: memberError } = await supabase
       .from('workspace_members')
       .insert({
         workspace_id: workspace.id,
-        user_id: userId,
+        user_id: user.id,
         role: 'owner',
       });
 
