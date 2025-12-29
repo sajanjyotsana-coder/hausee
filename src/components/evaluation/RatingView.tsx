@@ -24,6 +24,7 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
   const [itemNotes, setItemNotes] = useState<HomeEvaluation['itemNotes']>({});
   const [sectionNotes, setSectionNotes] = useState<HomeEvaluation['sectionNotes']>({});
   const [userOverallRating, setUserOverallRating] = useState<number | null>(null);
+  const [currentEvaluation, setCurrentEvaluation] = useState<HomeEvaluation | null>(evaluation);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
@@ -36,6 +37,7 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
       setItemNotes(evaluation.itemNotes || {});
       setSectionNotes(evaluation.sectionNotes || {});
       setUserOverallRating(evaluation.userOverallRating || null);
+      setCurrentEvaluation(evaluation);
     }
   }, [evaluation]);
 
@@ -71,10 +73,11 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
         evaluationStatus: completionPercentage > 0 ? 'in_progress' as const : 'not_started' as const,
       };
 
-      const { success, error } = await saveEvaluation(evaluationData);
+      const { success, error, data } = await saveEvaluation(evaluationData);
 
-      if (success) {
+      if (success && data) {
         setLastSaved(new Date());
+        setCurrentEvaluation(data);
         onUpdate();
       } else {
         console.error('Save error:', error);
@@ -285,7 +288,7 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
             key={category.id}
             category={category}
             categoryId={category.id}
-            evaluationId={evaluation?.id || null}
+            evaluationId={currentEvaluation?.id || null}
             userId={user?.id || ''}
             isExpanded={expandedCategories.has(category.id)}
             onToggle={() => handleToggleCategory(category.id)}
