@@ -285,6 +285,8 @@ export default function RatingView({ home, evaluation, onBack, onUpdate }: Ratin
             key={category.id}
             category={category}
             categoryId={category.id}
+            evaluationId={evaluation?.id || null}
+            userId={user?.id || ''}
             isExpanded={expandedCategories.has(category.id)}
             onToggle={() => handleToggleCategory(category.id)}
             ratings={ratings[category.id] || {}}

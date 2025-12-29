@@ -1064,3 +1064,260 @@ export async function updateEvaluationRating(
     };
   }
 }
+
+export async function uploadEvaluationPhoto(
+  file: File,
+  evaluationId: string,
+  sectionId: string,
+  userId: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `${userId}/${evaluationId}/${sectionId}/${fileName}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('evaluation-photos')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      return { success: false, error: uploadError.message };
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('evaluation-photos')
+      .getPublicUrl(filePath);
+
+    const photoRecord = {
+      evaluation_id: evaluationId,
+      section_id: sectionId,
+      storage_path: publicUrl,
+      thumbnail_path: publicUrl,
+      file_size: file.size,
+      mime_type: file.type,
+      display_order: 0,
+    };
+
+    const { data: dbData, error: dbError } = await supabase
+      .from('evaluation_photos')
+      .insert(photoRecord)
+      .select()
+      .single();
+
+    if (dbError) {
+      await supabase.storage.from('evaluation-photos').remove([filePath]);
+      console.error('Database error:', dbError);
+      return { success: false, error: dbError.message };
+    }
+
+    return { success: true, data: dbData };
+  } catch (err) {
+    console.error('Error uploading photo:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
+}
+
+export async function deleteEvaluationPhoto(
+  photoId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: photo, error: fetchError } = await supabase
+      .from('evaluation_photos')
+      .select('storage_path')
+      .eq('id', photoId)
+      .single();
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    const url = new URL(photo.storage_path);
+    const pathParts = url.pathname.split('/');
+    const filePath = pathParts.slice(pathParts.indexOf(userId)).join('/');
+
+    const { error: storageError } = await supabase.storage
+      .from('evaluation-photos')
+      .remove([filePath]);
+
+    if (storageError) {
+      console.error('Storage delete error:', storageError);
+    }
+
+    const { error: dbError } = await supabase
+      .from('evaluation_photos')
+      .delete()
+      .eq('id', photoId);
+
+    if (dbError) {
+      return { success: false, error: dbError.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Error deleting photo:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
+}
+
+export async function uploadEvaluationVoiceNote(
+  audioBlob: Blob,
+  duration: number,
+  evaluationId: string,
+  sectionId: string,
+  userId: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.webm`;
+    const filePath = `${userId}/${evaluationId}/${sectionId}/${fileName}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('evaluation-voice-notes')
+      .upload(filePath, audioBlob, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: 'audio/webm',
+      });
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      return { success: false, error: uploadError.message };
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('evaluation-voice-notes')
+      .getPublicUrl(filePath);
+
+    const voiceNoteRecord = {
+      evaluation_id: evaluationId,
+      section_id: sectionId,
+      storage_path: publicUrl,
+      duration,
+      file_size: audioBlob.size,
+    };
+
+    const { data: dbData, error: dbError } = await supabase
+      .from('evaluation_voice_notes')
+      .insert(voiceNoteRecord)
+      .select()
+      .single();
+
+    if (dbError) {
+      await supabase.storage.from('evaluation-voice-notes').remove([filePath]);
+      console.error('Database error:', dbError);
+      return { success: false, error: dbError.message };
+    }
+
+    return { success: true, data: dbData };
+  } catch (err) {
+    console.error('Error uploading voice note:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
+}
+
+export async function deleteEvaluationVoiceNote(
+  voiceNoteId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: voiceNote, error: fetchError } = await supabase
+      .from('evaluation_voice_notes')
+      .select('storage_path')
+      .eq('id', voiceNoteId)
+      .single();
+
+    if (fetchError) {
+      return { success: false, error: fetchError.message };
+    }
+
+    const url = new URL(voiceNote.storage_path);
+    const pathParts = url.pathname.split('/');
+    const filePath = pathParts.slice(pathParts.indexOf(userId)).join('/');
+
+    const { error: storageError } = await supabase.storage
+      .from('evaluation-voice-notes')
+      .remove([filePath]);
+
+    if (storageError) {
+      console.error('Storage delete error:', storageError);
+    }
+
+    const { error: dbError } = await supabase
+      .from('evaluation_voice_notes')
+      .delete()
+      .eq('id', voiceNoteId);
+
+    if (dbError) {
+      return { success: false, error: dbError.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Error deleting voice note:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
+}
+
+export async function loadEvaluationMedia(
+  evaluationId: string,
+  sectionId: string
+): Promise<{
+  photos: any[];
+  voiceNotes: any[];
+  error?: string;
+}> {
+  try {
+    const { data: photos, error: photosError } = await supabase
+      .from('evaluation_photos')
+      .select('*')
+      .eq('evaluation_id', evaluationId)
+      .eq('section_id', sectionId)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (photosError) {
+      console.error('Error loading photos:', photosError);
+      return { photos: [], voiceNotes: [], error: photosError.message };
+    }
+
+    const { data: voiceNotes, error: voiceNotesError } = await supabase
+      .from('evaluation_voice_notes')
+      .select('*')
+      .eq('evaluation_id', evaluationId)
+      .eq('section_id', sectionId)
+      .order('created_at', { ascending: true });
+
+    if (voiceNotesError) {
+      console.error('Error loading voice notes:', voiceNotesError);
+      return { photos: photos || [], voiceNotes: [], error: voiceNotesError.message };
+    }
+
+    return {
+      photos: photos || [],
+      voiceNotes: voiceNotes || [],
+    };
+  } catch (err) {
+    console.error('Error loading evaluation media:', err);
+    return {
+      photos: [],
+      voiceNotes: [],
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
+}
